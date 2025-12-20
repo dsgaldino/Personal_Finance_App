@@ -1,0 +1,33 @@
+# Virtualenv
+.venv/
+venv/
+
+# Dados reais - não subir
+data/real/
+
+# Configurações sensíveis
+config/config.yaml
+.streamlit/secrets.toml
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDEs
+.vscode/
+
+# Arquivos de dados em geral (proteção extra)
+*.xls
+*.xlsx
+*.csv
+
+# Sistema
+.DS_Store
+Thumbs.db
