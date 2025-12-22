@@ -2,8 +2,12 @@ from pathlib import Path
 import re  # needed for catching regex errors
 import pandas as pd
 
+# Project root: personal_finance_app
+ROOT_DIR = Path(__file__).resolve().parents[2]
+
 # Path to the external rules file (root/config/categories_rules.csv)
-RULES_PATH = Path("config/categories_rules.csv")
+RULES_PATH = ROOT_DIR / "config" / "categories_rules.csv"
+
 
 
 def load_category_rules() -> pd.DataFrame:
@@ -77,3 +81,29 @@ def apply_categories(df: pd.DataFrame) -> pd.DataFrame:
     df = df.drop(columns=["description_upper"])
     return df
 
+
+def append_rule(match: str, category: str, subcategory: str) -> None:
+    """
+    Append a new categorization rule to the CSV file.
+
+    The 'match' text is stored in upper case, consistent with load_category_rules().
+    If the file does not exist yet, it will be created.
+    """
+    match = str(match).strip().upper()
+    category = str(category).strip()
+    subcategory = str(subcategory).strip()
+
+    if not match:
+        raise ValueError("Match text cannot be empty.")
+
+    new_row = pd.DataFrame(
+        [{"match": match, "category": category, "subcategory": subcategory}]
+    )
+
+    if RULES_PATH.exists():
+        rules = pd.read_csv(RULES_PATH)
+        rules = pd.concat([rules, new_row], ignore_index=True)
+    else:
+        rules = new_row
+
+    rules.to_csv(RULES_PATH, index=False)

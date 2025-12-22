@@ -2,10 +2,11 @@
 .venv/
 venv/
 
-# Dados reais - não subir
+# Private data - NOT UPLOAD
 data/real/
+config/account_mapping.csv
 
-# Configurações sensíveis
+# Private settigns
 config/config.yaml
 .streamlit/secrets.toml
 .env
@@ -23,7 +24,7 @@ __pycache__/
 # IDEs
 .vscode/
 
-# Arquivos de dados em geral (proteção extra)
+# General data file (Extra Protection)
 *.xls
 *.xlsx
 *.csv
