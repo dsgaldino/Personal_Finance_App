@@ -35,7 +35,7 @@ def apply_categories(df: pd.DataFrame) -> pd.DataFrame:
     """
     rules = load_category_rules()
 
-    desc_col = "description"
+    desc_col = "description_cleaned"
     amount_col = "original_amount"
 
     if desc_col not in df.columns:

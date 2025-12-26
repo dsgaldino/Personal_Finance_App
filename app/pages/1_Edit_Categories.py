@@ -10,7 +10,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.append(str(ROOT_DIR))
 
 from src.data.abn.load_abn import load_all_abn
-from src.data.abn.transform_abn import abn_full_pipeline
+from personal_finance_app.src.data.abn.transform_abn2 import abn_full_pipeline
 from src.utils.categorization import load_category_rules, append_rule
 
 
