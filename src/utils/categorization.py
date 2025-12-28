@@ -1,109 +1,67 @@
+from __future__ import annotations
+
 from pathlib import Path
-import re  # needed for catching regex errors
 import pandas as pd
 
-# Project root: personal_finance_app
-ROOT_DIR = Path(__file__).resolve().parents[2]
 
-# Path to the external rules file (root/config/categories_rules.csv)
-RULES_PATH = ROOT_DIR / "config" / "categories_rules.csv"
-
+RULES_PATH = Path("config/categories_rules.csv")
 
 
 def load_category_rules() -> pd.DataFrame:
-    """Load category rules from CSV and normalize match column."""
     rules = pd.read_csv(RULES_PATH)
 
-    # Ensure required columns exist
     expected_cols = {"match", "category", "subcategory"}
     missing = expected_cols - set(rules.columns)
     if missing:
-        raise ValueError(f"Missing columns in rules file: {missing}")
+        raise ValueError(f"Missing columns in rules file: {sorted(missing)}")
 
-    rules["match"] = rules["match"].astype(str).str.upper()
-    rules["category"] = rules["category"].astype(str)
-    rules["subcategory"] = rules["subcategory"].astype(str)
+    rules = rules.copy()
+    rules["match"] = rules["match"].astype(str).str.upper().str.strip()
+    rules["category"] = rules["category"].astype(str).str.strip()
+    rules["subcategory"] = rules["subcategory"].astype(str).str.strip()
+
+    # ignora linhas vazias
+    rules = rules[rules["match"].astype(bool)]
     return rules
 
 
-def apply_categories(df: pd.DataFrame) -> pd.DataFrame:
+def apply_categories_to_cleaned(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Add transaction_type, category and subcategory columns to the DataFrame
-    based on description and external rules file.
-    - transaction_type: 'Income' if original_amount > 0 else 'Expense'
-    - category / subcategory: filled using substring matches from rules
+    Expects columns:
+      - transaction_id
+      - description_cleaned
+      - amount (optional; only used if you want type-based logic later)
+    Returns df with:
+      - category_auto
+      - subcategory_auto
     """
     rules = load_category_rules()
 
-    desc_col = "description_cleaned"
-    amount_col = "original_amount"
+    if "transaction_id" not in df.columns:
+        raise KeyError("Column 'transaction_id' not found")
+    if "description_cleaned" not in df.columns:
+        raise KeyError("Column 'description_cleaned' not found")
 
-    if desc_col not in df.columns:
-        raise KeyError(f"Column '{desc_col}' not found in DataFrame")
-    if amount_col not in df.columns:
-        raise KeyError(f"Column '{amount_col}' not found in DataFrame")
+    out = df.copy()
 
-    df = df.copy()
-    df["description_upper"] = df[desc_col].astype(str).str.upper().fillna("")
+    out["desc_upper"] = out["description_cleaned"].astype(str).str.upper().fillna("")
+    out["category_auto"] = None
+    out["subcategory_auto"] = None
 
-    df["transaction_type"] = df[amount_col].apply(
-        lambda x: "Income" if x > 0 else "Expense"
-    )
-    df["category"] = None
-    df["subcategory"] = None
+    # primeira regra que casar “ganha”
+    for _, rule in rules.iterrows():
+        pattern = rule["match"]
+        mask = out["desc_upper"].str.contains(pattern, na=False, regex=False)
+        out.loc[mask & out["category_auto"].isna(), "category_auto"] = rule["category"]
+        out.loc[mask & out["subcategory_auto"].isna(), "subcategory_auto"] = rule["subcategory"]
 
-    # DEBUG: print each pattern before applying
-    for idx, rule in rules.iterrows():
-        raw_pattern = rule["match"]
+    return out.drop(columns=["desc_upper"])
 
-        if pd.isna(raw_pattern):
-            continue
-
-        pattern = str(raw_pattern).upper()
-        print(f"Applying rule {idx}: pattern = {repr(pattern)}")
-
-        try:
-            mask = df["description_upper"].str.contains(pattern, na=False, regex=False)
-        except Exception as e:
-            # print problematic pattern and re-raise to ver no log
-            print(f"ERROR on pattern {idx}: {repr(pattern)} -> {e}")
-            raise
-
-        category = rule["category"]
-        subcategory = rule["subcategory"]
-
-        category = None if pd.isna(category) or category == "" else str(category)
-        subcategory = None if pd.isna(subcategory) or subcategory == "" else str(subcategory)
-
-        df.loc[mask, "category"] = category
-        df.loc[mask, "subcategory"] = subcategory
-
-    df = df.drop(columns=["description_upper"])
-    return df
+def get_category_options(rules: pd.DataFrame) -> list[str]:
+    cats = sorted(set(rules["category"].dropna().astype(str).str.strip()))
+    return [""] + cats  # "" = None (sem override)
 
 
-def append_rule(match: str, category: str, subcategory: str) -> None:
-    """
-    Append a new categorization rule to the CSV file.
-
-    The 'match' text is stored in upper case, consistent with load_category_rules().
-    If the file does not exist yet, it will be created.
-    """
-    match = str(match).strip().upper()
-    category = str(category).strip()
-    subcategory = str(subcategory).strip()
-
-    if not match:
-        raise ValueError("Match text cannot be empty.")
-
-    new_row = pd.DataFrame(
-        [{"match": match, "category": category, "subcategory": subcategory}]
-    )
-
-    if RULES_PATH.exists():
-        rules = pd.read_csv(RULES_PATH)
-        rules = pd.concat([rules, new_row], ignore_index=True)
-    else:
-        rules = new_row
-
-    rules.to_csv(RULES_PATH, index=False)
+def get_subcategory_options(rules: pd.DataFrame) -> list[str]:
+    subs = sorted(set(rules["subcategory"].dropna().astype(str).str.strip()))
+    return [""] + subs  # "" = None (sem override)

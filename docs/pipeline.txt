@@ -1,0 +1,128 @@
+O app (visão geral)
+Seu app é um sistema local para:
+
+Importar extratos (ABN hoje; outros depois),
+
+Transformar tudo para um formato padrão,
+
+Categorizar automaticamente,
+
+Permitir ajustes manuais (categoria/subcategoria/descrição),
+
+Salvar tudo de forma persistente (SQLite),
+
+Mostrar tabelas, filtros e análises (Streamlit).
+
+Pastas do projeto
+.venv/
+Ambiente virtual do Python do projeto.
+
+Contém as bibliotecas instaladas (pandas, streamlit, xlrd etc.).
+
+Não faz parte do “app” em si; é só o ambiente para rodar.
+
+app/
+Camada de interface (Streamlit).
+
+app/app.py: página principal (idealmente só “orquestra”: chama funções do src/, mostra tabelas e gráficos).
+
+app/pages/: páginas adicionais do Streamlit (cada arquivo vira uma página).
+
+config/
+Configurações editáveis pelo usuário.
+
+categories_rules.csv: regras de categorização (match → category/subcategory).
+
+account_mapping.csv: apelidos para contas (ex.: número do ABN → “Conta conjunta”).
+
+data/
+Dados locais.
+
+data/real/: arquivos brutos (extratos). Em V1 pode existir, mas com upload ela vira opcional.
+
+data/processed/: pode continuar existindo para exports/backups; com SQLite, o “estado real” fica no banco.
+
+data/example/: só para testes/demonstração (pode remover se não usa).
+
+src/
+Seu “motor” (lógica de negócio e dados).
+
+src/data/: conectores/pipelines por fonte (abn/revolut/amex…).
+
+src/utils/: funções reutilizáveis (limpeza, categorização).
+
+src/domain/: regras de orçamento e investimentos (metas, alocação, rebalanceamento).
+
+docs/
+Documentação do projeto (o que o app faz, como usar, roadmap).
+
+tests/
+Testes automatizados (especialmente para: loader, cleaning, categorization e pipeline).
+
+Componentes do sistema (o que existe “de verdade”)
+1) Importação (upload)
+O usuário precisa conseguir importar dados:
+
+Upload de arquivos ABN (.xls/.xlsx) via UI.
+
+(Opcional) ainda permitir “ler da pasta data/real/abn” para seu uso pessoal.
+
+Saída desta etapa: DataFrame “raw” (cru), como veio do banco.
+
+2) Pipeline ABN (transformação)
+Transforma raw → padrão do app.
+Dentro disso entram sub-etapas:
+
+Padronizar colunas (data, valor, descrição, moeda, conta).
+
+Limpar descrição (gerar description_cleaned).
+
+Categorização (transaction_type, category, subcategory).
+
+Saída: DataFrame já no schema padrão do app.
+
+3) Persistência (SQLite)
+Aqui fica o “estado do app”.
+
+Guardar transações importadas.
+
+Guardar contas e saldo inicial.
+
+Guardar edições manuais (categoria/subcategoria/descrição ajustadas).
+
+Permitir merge: importar extrato novo sem duplicar e sem perder edições.
+
+4) Camada de ajuste manual (Ajustes/Parâmetros)
+Página(s) onde vocês ajustam:
+
+Categorias não reconhecidas (criar regra nova).
+
+Corrigir categoria/subcategoria de transações específicas.
+
+Editar descrição (mostrar DETAILS original e permitir override).
+
+Ajustar account mapping.
+
+Ajustar parâmetros financeiros (reserva de emergência, % investimento, distribuição etc.).
+
+Definir saldo inicial por conta.
+
+5) Visualização (Overview / Transactions / Analytics)
+Overview: visão geral (receitas x despesas, saldo por conta, evolução mensal, etc.).
+
+Transactions: tabela com filtros e drill-down; mostra DESCRIPTION e DETAILS.
+
+Analytics: gráficos (despesas por categoria, tendências, comparativos por mês).
+
+Investments (V2): carteira e aportes/rebalanceamento.
+
+Como o fluxo funciona no dia a dia
+Vocês fazem upload do extrato.
+
+Pipeline transforma e categoriza.
+
+App salva no SQLite.
+
+Em “Ajustes”, vocês corrigem o que faltou (e isso fica salvo).
+
+Nos relatórios, o app sempre usa os dados já corrigidos.
