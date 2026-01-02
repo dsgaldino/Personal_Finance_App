@@ -1,0 +1,65 @@
+/* ================================
+   Galdiex: Sidebar nav header
+   ================================ */
+
+.galdiex-nav-header {
+  text-align: center;
+  padding: 0.75rem 0.5rem 0.75rem 0.5rem;
+  margin: 0.25rem 0 0.75rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.galdiex-nav-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.galdiex-nav-subtitle {
+  opacity: 0.75;
+  font-size: 0.78rem;
+  margin-top: 0.15rem;
+}
+
+/* ================================
+   Galdiex: Sidebar navigation style
+   Works with st.navigation (data-testid selectors)
+   ================================ */
+
+/* Slightly tighten the navigation spacing */
+div[data-testid="stSidebarNav"] ul[data-testid="stSidebarNavItems"] {
+  margin-top: 0.25rem;
+}
+
+/* Link container */
+div[data-testid="stSidebarNav"] a[data-testid="stSidebarNavLink"] {
+  border-radius: 8px;
+}
+
+/* Hover background for the whole row */
+div[data-testid="stSidebarNav"] a[data-testid="stSidebarNavLink"]:hover {
+  background-color: rgba(42, 157, 143, 0.16);
+}
+
+/* Hover text color (needs targeting span inside the link) */
+div[data-testid="stSidebarNav"]
+  ul[data-testid="stSidebarNavItems"]
+  li a[data-testid="stSidebarNavLink"]:hover span {
+  color: rgba(255, 255, 255, 0.95) !important;
+  font-weight: 600;
+}
+
+/* Group section labels (Home/Transactions/Analytics/Settings) */
+div[data-testid="stSidebarNav"] span {
+  letter-spacing: 0.2px;
+}
+
+/* ================================
+   Optional: general small tweaks
+   ================================ */
+
+/* Reduce some extra padding in sidebar content area */
+section[data-testid="stSidebar"] > div {
+  padding-top: 1rem;
+}

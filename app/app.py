@@ -3,18 +3,34 @@ from pathlib import Path
 
 import streamlit as st
 
-st.set_page_config(page_title="Personal Finance App", layout="wide")
-
+# --- Ensure project root is importable before importing local packages ---
 ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
-    sys.path.append(str(ROOT_DIR))
+    sys.path.insert(0, str(ROOT_DIR))
 
+from config.app_config import BRAND
 from src.db.schema import init_db
+from src.ui.branding import apply_global_css, inject_sidebar_nav_header
+
+# --- Page config (must be first Streamlit command) ---
+st.set_page_config(
+    page_title=BRAND.name,
+    page_icon=BRAND.icon_emoji,
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# --- DB init ---
 init_db()
 
+# --- UI (CSS + header above nav) ---
+apply_global_css()
+inject_sidebar_nav_header()
+
 pages = {
-    "Main": [
+    "Home": [
         st.Page("pages/overview.py", title="Overview"),
+        st.Page("pages/dashboard.py", title="Dashboard"),
     ],
     "Transactions": [
         st.Page("pages/import_data.py", title="Import"),

@@ -28,6 +28,7 @@ __pycache__/
 *.xls
 *.xlsx
 *.csv
+*.sqlite
 
 # Sistema
 .DS_Store

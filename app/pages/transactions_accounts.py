@@ -5,10 +5,15 @@ from src.db.connection import get_conn
 from src.db.categorization_repo import categorize_transactions, save_category_overrides
 from src.utils.categorization import load_category_rules, get_category_options, get_subcategory_options
 
+from src.db.cleaning_repo import recompute_description_cleaned
 
 st.title("Transactions")
 
 conn = get_conn()
+
+if st.button("Recompute description_cleaned (apply latest cleaning)"):
+    n = recompute_description_cleaned(conn, only_missing=False)
+    st.success(f"Updated description_cleaned for: {n} transactions")
 
 left, right = st.columns(2)
 with left:

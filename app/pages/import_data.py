@@ -1,138 +1,135 @@
 # app/pages/import_data.py
+from __future__ import annotations
+
 import pandas as pd
 import streamlit as st
 
-from src.db.connection import get_conn
-from src.data.transformers.transform_abn import transform_abn_to_transactions
-from src.db.transactions_repo import insert_transactions
+from src.utils.categorization import apply_categories
 
 
-st.title("Transactions · Import")
+def _validate_required_columns(df: pd.DataFrame, required: list[str]) -> None:
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        raise KeyError(f"Missing required columns: {missing}")
 
-conn = get_conn()
 
-accounts = pd.read_sql_query(
+def _standardize_columns(df: pd.DataFrame) -> pd.DataFrame:
     """
-    SELECT account_id, account_name, institution, currency
-    FROM accounts
-    ORDER BY institution, account_name
-    """,
-    conn,
-)
+    Standardize input columns to match the app's expected schema.
 
-if accounts.empty:
-    st.warning("Create at least one account in Settings → Accounts before importing.")
-    st.stop()
+    This keeps the page independent from bank-specific loaders for now.
+    If your ABN transformer/loader already outputs the standardized schema,
+    you can remove this and just call apply_categories() directly.
+    """
+    df = df.copy()
 
-files = st.file_uploader(
-    "Upload ABN statements (.xls / .xlsx)",
-    type=["xls", "xlsx"],
-    accept_multiple_files=True,
-)
+    rename_map = {}
+    if "transactiondate" in df.columns:
+        rename_map["transactiondate"] = "date"
+    if "date" not in df.columns and "Date" in df.columns:
+        rename_map["Date"] = "date"
 
-if not files:
-    st.info("Upload one or more files to preview them.")
-    st.stop()
+    if "description" not in df.columns and "Description" in df.columns:
+        rename_map["Description"] = "description"
+    if "description" not in df.columns and "details" in df.columns:
+        rename_map["details"] = "description"
 
-# Read all uploaded files
-dfs = []
-read_errors = []
-for f in files:
-    try:
-        df = pd.read_excel(f)
-        df["__source_file__"] = f.name
+    if "original_amount" not in df.columns and "amount" in df.columns:
+        rename_map["amount"] = "original_amount"
+    if "original_amount" not in df.columns and "Amount" in df.columns:
+        rename_map["Amount"] = "original_amount"
+
+    if "original_currency" not in df.columns and "currency" in df.columns:
+        rename_map["currency"] = "original_currency"
+    if "original_currency" not in df.columns and "Currency" in df.columns:
+        rename_map["Currency"] = "original_currency"
+
+    df = df.rename(columns=rename_map)
+
+    # Best-effort parsing
+    if "date" in df.columns:
+        df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date
+
+    if "original_amount" in df.columns:
+        df["original_amount"] = pd.to_numeric(df["original_amount"], errors="coerce")
+
+    # Optional standard columns (safe defaults)
+    if "account_source" not in df.columns:
+        df["account_source"] = None
+    if "institution" not in df.columns:
+        df["institution"] = "ABN"
+
+    return df
+
+
+@st.cache_data(show_spinner=False)
+def _read_excel_files(files: list, max_rows: int | None = None) -> pd.DataFrame:
+    dfs: list[pd.DataFrame] = []
+
+    for f in files:
+        df = pd.read_excel(f)  # Streamlit UploadedFile is file-like [web:635]
+        df["__source_file__"] = getattr(f, "name", None)
         dfs.append(df)
+
+    df_all = pd.concat(dfs, ignore_index=True)
+
+    if max_rows is not None and len(df_all) > max_rows:
+        df_all = df_all.head(max_rows)
+
+    return df_all
+
+
+def render() -> None:
+    st.title("Import")
+    st.caption("Upload file (.xls / .xlsx)")
+
+    files = st.file_uploader(
+        "Upload file (.xls / .xlsx)",
+        type=["xls", "xlsx"],
+        accept_multiple_files=True,
+        label_visibility="collapsed",
+    )  # st.file_uploader supports extensions filtering [web:640]
+
+    if not files:
+        st.info("Upload one or more files to preview them.")
+        return
+
+    try:
+        with st.spinner("Reading files..."):
+            df_raw = _read_excel_files(files)
+
+        df_std = _standardize_columns(df_raw)
+
+        _validate_required_columns(
+            df_std,
+            required=["date", "description", "original_amount", "original_currency"],
+        )
+
+        with st.spinner("Applying categories..."):
+            df_cat = apply_categories(df_std)
+
+        # Keep the display focused
+        preferred_cols = [
+            "date",
+            "description",
+            "original_amount",
+            "original_currency",
+            "transaction_type",
+            "category",
+            "subcategory",
+            "__source_file__",
+        ]
+        show_cols = [c for c in preferred_cols if c in df_cat.columns]
+
+        st.dataframe(
+            df_cat[show_cols].sort_values("date", ascending=False),
+            use_container_width=True,
+            hide_index=True,
+        )
+
     except Exception as e:
-        read_errors.append((f.name, str(e)))
+        st.error("Import failed.")
+        st.exception(e)
 
-if read_errors:
-    for name, err in read_errors:
-        st.error(f"Could not read {name}: {err}")
 
-if not dfs:
-    st.stop()
-
-df_all = pd.concat(dfs, ignore_index=True)
-
-# ABN validation: must contain accountNumber
-if "accountNumber" not in df_all.columns:
-    st.error("Expected ABN column 'accountNumber'.")
-    st.stop()
-
-df_all["accountNumber"] = pd.Series(df_all["accountNumber"]).dropna().astype(str).str.strip()
-detected_accounts = sorted(df_all["accountNumber"].dropna().unique().tolist())
-
-st.subheader("Detected accounts in uploaded files")
-
-accounts_id_set = set(accounts["account_id"].astype(str).tolist())
-
-mapping_rows = []
-missing = []
-for acc in detected_accounts:
-    ok = str(acc) in accounts_id_set
-    mapping_rows.append({"accountNumber": acc, "Status": "Found" if ok else "Missing"})
-    if not ok:
-        missing.append(acc)
-
-st.dataframe(pd.DataFrame(mapping_rows), use_container_width=True, hide_index=True)
-
-if missing:
-    st.warning(
-        "Some accountNumber values are not registered in Settings → Accounts. "
-        "Create them before importing."
-    )
-    st.stop()
-
-st.divider()
-st.subheader("Transform preview")
-
-try:
-    tx = transform_abn_to_transactions(df_all)
-except Exception as e:
-    st.error(f"Transform error: {e}")
-    st.stop()
-
-st.caption(f"{len(tx)} rows ready to import")
-
-# --- Quick standardized preview (small) ---
-st.dataframe(
-    tx[["date", "account_id", "amount", "currency", "description_cleaned"]].head(20),
-    use_container_width=True,
-    hide_index=True,
-)
-
-# --- Raw vs Cleaned preview (expanded) ---
-with st.expander("Show cleaning preview (raw vs cleaned)", expanded=False):
-    preview_n = st.slider("Rows to preview", min_value=10, max_value=200, value=50, step=10)
-
-    left, right = st.columns(2)
-
-    with left:
-        st.caption("Raw (details)")
-        st.dataframe(
-            tx[["date", "account_id", "amount", "currency", "details"]].head(preview_n),
-            use_container_width=True,
-            hide_index=True,
-        )
-
-    with right:
-        st.caption("Cleaned (description_cleaned)")
-        st.dataframe(
-            tx[["date", "account_id", "amount", "currency", "description_cleaned"]].head(preview_n),
-            use_container_width=True,
-            hide_index=True,
-        )
-
-    st.caption("Combined")
-    st.dataframe(
-        tx[["date", "amount", "details", "description_cleaned"]].head(preview_n),
-        use_container_width=True,
-        hide_index=True,
-    )
-
-# --- Import action ---
-confirm = st.checkbox("I confirm I want to import these transactions.", value=False)
-
-if st.button("Import & Save", type="primary", disabled=not confirm):
-    inserted = insert_transactions(conn, tx)
-    st.success(f"Import finished. Inserted: {inserted}")
+render()
