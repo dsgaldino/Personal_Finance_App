@@ -65,3 +65,41 @@ def get_category_options(rules: pd.DataFrame) -> list[str]:
 def get_subcategory_options(rules: pd.DataFrame) -> list[str]:
     subs = sorted(set(rules["subcategory"].dropna().astype(str).str.strip()))
     return [""] + subs  # "" = None (sem override)
+
+def apply_categories(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Apply category rules to a standardized transactions DataFrame (UI usage).
+
+    Expected columns:
+      - description
+      - original_amount
+
+    Adds:
+      - transaction_type
+      - category
+      - subcategory
+    """
+    rules = load_category_rules()
+
+    if "description" not in df.columns:
+        raise KeyError("Column 'description' not found")
+    if "original_amount" not in df.columns:
+        raise KeyError("Column 'original_amount' not found")
+
+    out = df.copy()
+
+    out["transaction_type"] = out["original_amount"].apply(
+        lambda x: "Income" if pd.notna(x) and float(x) > 0 else "Expense"
+    )
+
+    desc_upper = out["description"].astype(str).str.upper().fillna("")
+    out["category"] = None
+    out["subcategory"] = None
+
+    for _, rule in rules.iterrows():
+        pattern = rule["match"]
+        mask = desc_upper.str.contains(pattern, na=False, regex=False)
+        out.loc[mask & out["category"].isna(), "category"] = rule["category"]
+        out.loc[mask & out["subcategory"].isna(), "subcategory"] = rule["subcategory"]
+
+    return out

@@ -13,7 +13,7 @@ class AppBrand:
 
 
 BRAND = AppBrand(
-    name="Galdiex",
+    name="Galfin",
     subtitle="Personal finance overview",
     icon_emoji="🧭",
     logo_path=None,  # e.g. Path("app/assets/logo.png")
